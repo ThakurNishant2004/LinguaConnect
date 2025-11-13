@@ -199,6 +199,8 @@ export function ChatInterface() {
               <Smile className="w-5 h-5" />
             </Button>
             <Input
+              id="chatInput"
+              name="chatInput"
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
