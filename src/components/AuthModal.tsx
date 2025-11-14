@@ -1,3 +1,4 @@
+// AuthModal.tsx
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
@@ -6,59 +7,61 @@ interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialMode?: "login" | "signup";
-  onSuccess: () => void; // 🔥 Alert LandingPage after success
+  onSuccess: () => void;
 }
 
-export function AuthModal({ isOpen, onClose, initialMode = "login", onSuccess }: AuthModalProps) {
+export function AuthModal({
+  isOpen,
+  onClose,
+  initialMode = "login",
+  onSuccess,
+}: AuthModalProps) {
   const [mode, setMode] = useState<"login" | "signup">(initialMode);
 
   useEffect(() => {
     if (isOpen) setMode(initialMode);
   }, [isOpen, initialMode]);
 
-  // ------------------ LOGIN STATE ------------------
-  const [loginData, setLoginData] = useState({
-    username: "",
-    password: "",
-  });
-
+  // Login
+  const [loginData, setLoginData] = useState({ username: "", password: "" });
   const handleLogin = () => {
-    // ✔ Example validation
     if (loginData.username === "demo" && loginData.password === "demo123") {
-      onSuccess(); // Unlock features
+      onSuccess();
     } else {
       alert("Invalid login.\nUse:\nUsername: demo\nPassword: demo123");
     }
   };
 
-  // ------------------ SIGNUP STATE ------------------
+  // Signup + OTP
   const [signupData, setSignupData] = useState({
     fullName: "",
     username: "",
     email: "",
     password: "",
   });
-
   const [showOtpPopup, setShowOtpPopup] = useState(false);
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [otpSuccess, setOtpSuccess] = useState(false);
 
   const sendOtp = () => {
-    if (!signupData.fullName || !signupData.username || !signupData.email || !signupData.password) {
+    if (
+      !signupData.fullName ||
+      !signupData.username ||
+      !signupData.email ||
+      !signupData.password
+    ) {
       alert("Please fill all fields before sending OTP.");
       return;
     }
-
+    // In a real app you'd send OTP here. We just open OTP popup.
     setShowOtpPopup(true);
   };
 
   const handleOtpChange = (value: string, index: number) => {
     if (isNaN(Number(value))) return;
-
     const copy = [...otp];
     copy[index] = value;
     setOtp(copy);
-
     if (value && index < 5) {
       const next = document.getElementById(`otp-${index + 1}`);
       next?.focus();
@@ -67,36 +70,30 @@ export function AuthModal({ isOpen, onClose, initialMode = "login", onSuccess }:
 
   const verifyOtp = () => {
     const finalOtp = otp.join("");
-
     if (finalOtp === "123456") {
       setOtpSuccess(true);
-
       setTimeout(() => {
         setOtpSuccess(false);
         setShowOtpPopup(false);
-        onSuccess(); // 🔥 Complete signup success
-      }, 1000);
+        onSuccess();
+      }, 900);
     } else {
-      alert("Invalid OTP! Use: 123456");
+      alert("Invalid OTP. Use: 123456");
     }
   };
 
-  // ------------------ MODAL UI (PORTAL) ------------------
   const modalContent = (
     <>
-      {/* BACKDROP */}
       <div
         className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[500]"
         onClick={onClose}
       />
 
-      {/* MAIN MODAL */}
       <div className="fixed inset-0 z-[510] flex items-center justify-center p-4">
         <div
           className="bg-white rounded-2xl shadow-xl max-w-md w-full animate-fade-in"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* HEADER */}
           <div className="flex items-center justify-between p-6 border-b">
             <h2 className="text-xl font-semibold">
               {mode === "login" ? "Login" : "Create Account"}
@@ -106,11 +103,15 @@ export function AuthModal({ isOpen, onClose, initialMode = "login", onSuccess }:
             </button>
           </div>
 
-          {/* BODY */}
           <div className="p-6">
-            {/* --------------- LOGIN FORM --------------- */}
             {mode === "login" && (
-              <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+              <form
+                className="space-y-4"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleLogin();
+                }}
+              >
                 <div>
                   <label className="text-sm font-medium">Username</label>
                   <input
@@ -134,10 +135,8 @@ export function AuthModal({ isOpen, onClose, initialMode = "login", onSuccess }:
                   />
                 </div>
 
-                {/* LOGIN BUTTON */}
                 <button
-                  type="button"
-                  onClick={handleLogin}
+                  type="submit"
                   className="w-full border border-blue-600 text-blue-600 py-2 rounded-lg hover:bg-blue-50"
                 >
                   Login
@@ -155,9 +154,13 @@ export function AuthModal({ isOpen, onClose, initialMode = "login", onSuccess }:
               </form>
             )}
 
-            {/* --------------- SIGNUP FORM --------------- */}
             {mode === "signup" && (
-              <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+              <form
+                className="space-y-4"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                }}
+              >
                 <div>
                   <label className="text-sm font-medium">Full Name</label>
                   <input
@@ -217,7 +220,6 @@ export function AuthModal({ isOpen, onClose, initialMode = "login", onSuccess }:
         </div>
       </div>
 
-      {/* OTP POPUP */}
       {showOtpPopup &&
         createPortal(
           <div className="fixed inset-0 bg-black/50 z-[600] flex items-center justify-center">
@@ -248,7 +250,6 @@ export function AuthModal({ isOpen, onClose, initialMode = "login", onSuccess }:
           document.body
         )}
 
-      {/* SUCCESS POPUP */}
       {otpSuccess &&
         createPortal(
           <div className="fixed inset-0 bg-black/40 z-[700] flex items-center justify-center">
@@ -259,7 +260,6 @@ export function AuthModal({ isOpen, onClose, initialMode = "login", onSuccess }:
           document.body
         )}
 
-      {/* Animation */}
       <style>{`
         @keyframes fadeIn {
           from { opacity: 0; transform: scale(.95); }
@@ -271,6 +271,5 @@ export function AuthModal({ isOpen, onClose, initialMode = "login", onSuccess }:
   );
 
   if (!isOpen) return null;
-
   return createPortal(modalContent, document.body);
 }
