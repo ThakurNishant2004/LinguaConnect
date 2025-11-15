@@ -1,5 +1,6 @@
-// AdminDashboard.tsx
-import React, { useState, useEffect, useRef, useMemo } from "react";
+// src/components/AdminDashboard.tsx
+import axios from "axios";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   MessageSquare,
   Globe,
@@ -12,13 +13,8 @@ import {
   BarChart3,
   X as XIcon,
 } from "lucide-react";
-
-// Use the browser-friendly mammoth import for frontend docx parsing
-import * as mammoth from "mammoth/mammoth.browser";
-
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-
 import {
   BarChart,
   Bar,
@@ -34,377 +30,374 @@ import {
   Line,
 } from "recharts";
 
-/** ====== Types ====== **/
-interface Message {
-  id: string;
-  sender: "user" | "assistant";
-  text: string;
-  timestamp: number;
-  language: string;
+import api from "../api/axiosInstance.ts";
+
+// ---------- constants ----------
+const timeRanges = ["24h", "7d", "30d", "90d"] as const;
+const ROWS_PER_PAGE = 12;
+
+// ---------- types ----------
+interface Stats {
+  totalConversations: { value: number; change: number };
+  activeUsers: { value: number; change: number };
+  topLanguagesUsed: { value: number; change: number };
+  avgResponseTime: { value: number; change: number };
+  conversationsByLanguage: { language: string; count: number; fill?: string }[];
+  languageDistribution: { name: string; value: number; color: string }[];
+  weeklyStats: { day: string; conversations: number; translations: number }[];
+  messages: any[];
 }
 
-interface FAQ {
-  id: string | number;
-  title?: string;
-  content?: string;
-  category?: string;
-  // preserve any uploaded raw fields
-  [k: string]: any;
-}
-
-/** ====== Local storage helpers (typed) ====== **/
-const readMessages = (): Message[] => {
-  try {
-    const raw = localStorage.getItem("chatMessages");
-    return raw ? (JSON.parse(raw) as Message[]) : [];
-  } catch {
-    return [];
-  }
-};
-
-const readLanguages = (): string[] => {
-  try {
-    const raw = localStorage.getItem("languages");
-    return raw ? (JSON.parse(raw) as string[]) : ["English", "Hindi", "Spanish"];
-  } catch {
-    return ["English", "Hindi", "Spanish"];
-  }
-};
-
-const readFaqs = (): FAQ[] => {
-  try {
-    const raw = localStorage.getItem("faqs");
-    return raw ? (JSON.parse(raw) as FAQ[]) : [];
-  } catch {
-    return [];
-  }
-};
-
-/** ====== DOCX helper using mammoth.browser ====== **/
-const extractDocxText = async (file: File): Promise<string> => {
-  const arrayBuffer = await file.arrayBuffer();
-  // mammoth.extractRawText accepts {arrayBuffer}
-  const result = await (mammoth as any).extractRawText({ arrayBuffer });
-  return result?.value || "";
-};
-
-/** ====== Component ====== **/
-export function AdminDashboard(): JSX.Element | null {
-  // require authentication (existing behavior)
+// ---------- component ----------
+export function AdminDashboard() {
   const isAuthenticated = localStorage.getItem("isAuthenticated") === "true";
   if (!isAuthenticated) {
     window.location.href = "/";
     return null;
   }
 
-  // admin flag (set isAdmin in localStorage: "true" for admin)
-  const isAdmin = localStorage.getItem("isAdmin") === "true";
+  const [messages, setMessages] = useState<any[]>([]);
+  const [languages, setLanguages] = useState<string[]>([]);
+  const [faqs, setFaqs] = useState<any[]>([]);
+  const [timeRange, setTimeRange] =
+    useState<(typeof timeRanges)[number]>("24h");
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  // core state
-  const [messages, setMessages] = useState<Message[]>(() => readMessages());
-  const [userCount, setUserCount] = useState<number>(() =>
-    Number(localStorage.getItem("userCount") || 0)
-  );
-  const [languages, setLanguages] = useState<string[]>(() => readLanguages());
-  const [faqs, setFaqs] = useState<FAQ[]>(() => readFaqs());
-
-  // time range
-  const [timeRange, setTimeRange] = useState<"24h" | "7d" | "30d" | "90d">(
-    "7d"
-  );
-
-  // reports modal state
   const [reportsOpen, setReportsOpen] = useState(false);
   const [reportSearch, setReportSearch] = useState("");
   const [reportLanguageFilter, setReportLanguageFilter] = useState<string>("");
-  const [reportPage, setReportPage] = useState<number>(1);
-  const rowsPerPage = 12;
+  const [reportPage, setReportPage] = useState(1);
 
-  const fileRef = useRef<HTMLInputElement | null>(null);
+  const [addLangOpen, setAddLangOpen] = useState(false);
+  const [faqFile, setFaqFile] = useState<File | null>(null);
+  const [newLangName, setNewLangName] = useState("");
+  const [newLangCode, setNewLangCode] = useState("");
 
-  // sync across tabs (storage)
+  const [userCount, setUserCount] = useState<number>(0);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const fetchStats = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get(`/api/admin/stats?period=${timeRange}`);
+      const d = res.data?.data || null;
+      setStats(d);
+      setMessages(d?.messages || []);
+      if (d?.activeUsers?.value != null) setUserCount(d.activeUsers.value);
+    } catch (err) {
+      console.error("Error fetching stats:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchLanguages = async () => {
+    try {
+      const res = await api.get("/api/admin/stats/languages");
+      const langs = res.data?.data || [];
+      setLanguages(langs.map((l: any) => l.code));
+    } catch (err) {
+      console.error("Error fetching languages:", err);
+    }
+  };
+
+  const fetchFaqs = async () => {
+    try {
+      const res = await axios.get("http://localhost:4001/api/faqs");
+      setFaqs(res.data?.data || []);
+    } catch (err) {
+      console.error("Error fetching faqs:", err);
+    }
+  };
+
   useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      // update full local state on storage changes (or when key is omitted)
-      if (!e.key || e.key === "chatMessages") setMessages(readMessages());
-      if (!e.key || e.key === "userCount") setUserCount(Number(localStorage.getItem("userCount") || 0));
-      if (!e.key || e.key === "languages") setLanguages(readLanguages());
-      if (!e.key || e.key === "faqs") setFaqs(readFaqs());
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    fetchStats();
+  }, [timeRange]);
+
+  useEffect(() => {
+    fetchLanguages();
+    fetchFaqs();
   }, []);
 
-  // persist when things change
-  useEffect(() => localStorage.setItem("chatMessages", JSON.stringify(messages)), [messages]);
-  useEffect(() => localStorage.setItem("languages", JSON.stringify(languages)), [languages]);
-  useEffect(() => localStorage.setItem("faqs", JSON.stringify(faqs)), [faqs]);
-
-  /** ====== Analytics calculations ====== **/
-  const now = Date.now();
-  const rangeMillis: Record<string, number> = {
-    "24h": 24 * 60 * 60 * 1000,
-    "7d": 7 * 24 * 60 * 60 * 1000,
-    "30d": 30 * 24 * 60 * 60 * 1000,
-    "90d": 90 * 24 * 60 * 60 * 1000,
-  };
-
-  const filteredByTime = useMemo(() => {
-    return messages.filter((m) => now - (m.timestamp || 0) <= rangeMillis[timeRange]);
-  }, [messages, timeRange, now]);
-
-  const totalConversations = filteredByTime.filter((m) => m.sender === "user").length;
-  const uniqueUsers = userCount;
-
-  // language counts with index signature
-  const languageCounts = useMemo((): Record<string, number> => {
-    const obj: Record<string, number> = {};
-    filteredByTime.forEach((m) => {
-      const lang = m.language || "Unknown";
-      obj[lang] = (obj[lang] || 0) + 1;
-    });
-    return obj;
-  }, [filteredByTime]);
-
-  const topLanguages = Object.keys(languageCounts).length;
-
-  const conversationsByLanguage = Object.keys(languageCounts).map((lang) => ({
-    language: lang,
-    count: languageCounts[lang],
-    fill: "#007BFF",
-  }));
-
-  const avgResponseTime = useMemo(() => {
-    let totalRT = 0;
-    let rtCount = 0;
-    for (let i = 0; i < filteredByTime.length; i++) {
-      const m = filteredByTime[i];
-      if (m.sender === "user") {
-        const next = filteredByTime[i + 1];
-        if (next && next.sender === "assistant") {
-          totalRT += (next.timestamp || 0) - (m.timestamp || 0);
-          rtCount++;
-        }
-      }
+  const filteredMessages = useMemo(() => {
+    let list = messages || [];
+    if (reportLanguageFilter) {
+      list = list.filter((m) => m.language === reportLanguageFilter);
     }
-    return rtCount > 0 ? (totalRT / rtCount / 1000).toFixed(1) + "s" : "0.0s";
-  }, [filteredByTime]);
-
-  // weekly stats
-  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const weeklyStats = useMemo(() => {
-    const map: Record<string, { conversations: number; translations: number }> = {};
-    days.forEach((d) => (map[d] = { conversations: 0, translations: 0 }));
-    filteredByTime.forEach((m) => {
-      const d = days[new Date(m.timestamp || 0).getDay()];
-      if (m.sender === "user") map[d].conversations++;
-      else map[d].translations++;
-    });
-    return days.map((d) => ({ day: d, conversations: map[d].conversations, translations: map[d].translations }));
-  }, [filteredByTime]);
-
-  // language distribution
-  const languageDistribution = useMemo(() => {
-    const keys = Object.keys(languageCounts);
-    if (keys.length === 0) return languages.map((l) => ({ name: l, value: 0, color: "#" + Math.floor(Math.random() * 16777215).toString(16) }));
-    const total = filteredByTime.length || 1;
-    return keys.map((k) => ({ name: k, value: Number(((languageCounts[k] / total) * 100).toFixed(1)), color: "#" + Math.floor(Math.random() * 16777215).toString(16) }));
-  }, [languageCounts, filteredByTime.length, languages]);
-
-  /** ====== Reports modal filtering & pagination ====== **/
-  const modalFilteredMessages = useMemo(() => {
-    let list = [...filteredByTime]; // already time-filtered by header timeRange
-    if (reportLanguageFilter) list = list.filter((m) => (m.language || "Unknown") === reportLanguageFilter);
-    if (reportSearch && reportSearch.trim().length > 0) {
+    if (reportSearch?.trim()) {
       const q = reportSearch.trim().toLowerCase();
-      list = list.filter((m) => {
-        return (m.text || "").toString().toLowerCase().includes(q) || (m.sender || "").toLowerCase().includes(q) || (m.language || "").toLowerCase().includes(q);
-      });
+      list = list.filter(
+        (m: any) =>
+          (m.text || "").toLowerCase().includes(q) ||
+          (m.sender || "").toLowerCase().includes(q) ||
+          (m.language || "").toLowerCase().includes(q)
+      );
     }
-    // sort desc by timestamp
-    list.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
     return list;
-  }, [filteredByTime, reportLanguageFilter, reportSearch]);
+  }, [messages, reportLanguageFilter, reportSearch]);
 
-  const pageCount = Math.max(1, Math.ceil(modalFilteredMessages.length / rowsPerPage));
-  useEffect(() => {
-    if (reportPage > pageCount) setReportPage(1);
-  }, [pageCount, reportPage]);
+  const modalFilteredMessages = filteredMessages.slice(
+    (reportPage - 1) * ROWS_PER_PAGE,
+    reportPage * ROWS_PER_PAGE
+  );
 
-  const pagedMessages = useMemo(() => {
-    const start = (reportPage - 1) * rowsPerPage;
-    return modalFilteredMessages.slice(start, start + rowsPerPage);
-  }, [modalFilteredMessages, reportPage]);
+  const pageCount = Math.max(
+    1,
+    Math.ceil(filteredMessages.length / ROWS_PER_PAGE)
+  );
 
-  /** ====== FILE UPLOAD (JSON / TXT / DOCX) — ADMIN ONLY ====== **/
-  const handleFaqFile = async (file?: File | null) => {
-    if (!file) return;
-    const name = file.name || "upload";
-    const ext = name.split(".").pop()?.toLowerCase() || "";
-
-    try {
-      if (ext === "json") {
-        const txt = await file.text();
-        const parsed = JSON.parse(txt);
-        const nextFaqs = Array.isArray(parsed) ? [...faqs, ...parsed] : [...faqs, parsed];
-        setFaqs(nextFaqs);
-        localStorage.setItem("faqs", JSON.stringify(nextFaqs));
-        alert("FAQs uploaded (JSON).");
-        return;
-      }
-
-      if (ext === "txt") {
-        const txt = await file.text();
-        const entry: FAQ = { id: Date.now(), title: name.replace(/\.txt$/i, ""), content: txt, category: "general" };
-        const nextFaqs = [...faqs, entry];
-        setFaqs(nextFaqs);
-        localStorage.setItem("faqs", JSON.stringify(nextFaqs));
-        alert("FAQ uploaded (TXT).");
-        return;
-      }
-
-      if (ext === "docx") {
-        const extracted = await extractDocxText(file);
-        const entry: FAQ = { id: Date.now(), title: name.replace(/\.docx$/i, ""), content: extracted, category: "general" };
-        const nextFaqs = [...faqs, entry];
-        setFaqs(nextFaqs);
-        localStorage.setItem("faqs", JSON.stringify(nextFaqs));
-        alert("FAQ uploaded (DOCX).");
-        return;
-      }
-
-      alert("Unsupported file type. Supported: .json, .txt, .docx");
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error("FAQ upload error:", err);
-      alert("Failed to read uploaded file.");
-    }
-  };
-
-  const onFaqFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0] ?? null;
-    handleFaqFile(f);
-    // reset input so same file can be uploaded again later
-    if (e.target) e.currentTarget.value = "";
-  };
-
-  /** ====== Export helpers ====== **/
-  const downloadObjectAsJson = (obj: any, filename = "report.json") => {
-    const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });
+  const downloadJSON = (data: any, filename = "report.json") => {
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: "application/json",
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = filename;
     a.click();
+    URL.revokeObjectURL(url);
   };
 
-  const exportFilteredAsCsv = (rows: any[], filename = "messages.csv") => {
-    const header = ["timestamp", "sender", "language", "text"];
-    const csvRows = [header, ...rows.map((m) => [m.timestamp, m.sender, m.language || "", (m.text || "").toString().replace(/\r?\n/g, " ")])];
-    const csv = csvRows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+  const downloadCSV = (data: any[], filename = "report.csv") => {
+    if (!data || data.length === 0) {
+      alert("No data to export");
+      return;
+    }
+    const headers = Object.keys(data[0] || {});
+    const csv = [
+      headers.join(","),
+      ...data.map((row) =>
+        headers.map((h) => `"${(row as any)[h] || ""}"`).join(",")
+      ),
+    ].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = filename;
     a.click();
+    URL.revokeObjectURL(url);
   };
 
-  const exportFullReport = (format: "json" | "csv" = "json") => {
-    const payload = {
-      meta: { generatedAt: new Date().toISOString(), totalMessages: messages.length, filteredCount: filteredByTime.length, userCount },
-      messages: filteredByTime,
-      languages,
-      faqs,
-      weeklyStats,
-      languageCounts,
+  const onFaqFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setFaqFile(e.target.files[0]);
+    }
+  };
+
+  const handleUploadFAQs = async () => {
+    if (!faqFile) return;
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const faqsJson = JSON.parse(reader.result as string);
+
+        const res = await api.post("/api/admin/upload-faqs", {
+          faqs: faqsJson,
+        });
+
+        alert(res.data?.message || "Uploaded FAQs");
+
+        fetchFaqs();
+        setFaqFile(null);
+      } catch (err) {
+        console.error(err);
+        alert("Failed to upload FAQs");
+      }
     };
-    if (format === "json") {
-      downloadObjectAsJson(payload, "lingua-full-report.json");
-    } else {
-      exportFilteredAsCsv(payload.messages, "lingua-full-report.csv");
-    }
-  };
 
-  const exportModalFiltered = (format: "json" | "csv" = "json") => {
-    if (format === "json") {
-      downloadObjectAsJson({ meta: { generatedAt: new Date().toISOString(), selectedCount: modalFilteredMessages.length }, messages: modalFilteredMessages }, "lingua-filtered-messages.json");
-    } else {
-      exportFilteredAsCsv(modalFilteredMessages, "lingua-filtered-messages.csv");
-    }
-  };
-
-  /** ====== Other actions ====== **/
-  const clearMessages = () => {
-    if (!confirm("Clear all chat messages? This cannot be undone.")) return;
-    setMessages([]);
-    localStorage.removeItem("chatMessages");
-    alert("Messages cleared.");
+    reader.readAsText(faqFile);
   };
 
   const simulateConversation = () => {
+    if (!languages.length) return alert("No languages available.");
     const ts = Date.now();
-    const newMsgs: Message[] = [
-      { id: `m-${ts}-1`, timestamp: ts - 60000, sender: "user", language: languages[0] || "English", text: "Demo: Hello there" },
-      { id: `m-${ts}-2`, timestamp: ts - 58000, sender: "assistant", language: languages[0] || "English", text: "Demo: Hi how can I help?" },
+    const newMsgs = [
+      {
+        id: `m-${ts}-1`,
+        timestamp: ts - 60000,
+        sender: "user",
+        language: languages[0],
+        text: "Demo: Hello there",
+      },
+      {
+        id: `m-${ts}-2`,
+        timestamp: ts - 58000,
+        sender: "assistant",
+        language: languages[0],
+        text: "Demo: Hi, how can I help?",
+      },
     ];
-    const next = [...messages, ...newMsgs];
-    setMessages(next);
-    localStorage.setItem("chatMessages", JSON.stringify(next));
+    setMessages((prev) => [...prev, ...newMsgs]);
     alert("Demo conversation added.");
   };
 
-  const addLanguage = () => {
-    const name = prompt("Enter new language:");
-    if (!name) return;
-    if (languages.includes(name)) return alert("Language exists");
-    const next = [...languages, name];
-    setLanguages(next);
-    localStorage.setItem("languages", JSON.stringify(next));
-    alert("Language added.");
+  const clearMessages = () => {
+    setMessages([]);
+    alert("All messages cleared.");
   };
 
-  /** ====== UI (kept same) ====== **/
+  const handleAddLanguage = async () => {
+    const code = newLangCode.trim().toLowerCase();
+    const name = newLangName.trim();
+
+    if (!name) return alert("Please enter a language name");
+    if (!code) return alert("Please enter a language code");
+
+    try {
+      const res = await api.post("/api/admin/add-language", { code, name });
+
+      alert(res.data?.message || "Language added");
+
+      setNewLangName("");
+      setNewLangCode("");
+      setAddLangOpen(false);
+
+      fetchLanguages();
+      fetchStats();
+    } catch (err: any) {
+      console.error(err);
+      alert(err?.response?.data?.message || "Failed to add language");
+    }
+  };
+
+  const exportFullReport = (format: "json" | "csv") => {
+    if (!stats) return alert("No stats available");
+
+    if (format === "json") {
+      downloadJSON(stats, "dashboard_report.json");
+    } else {
+      const data = stats.languageDistribution || [];
+      downloadCSV(data, "dashboard_report.csv");
+    }
+  };
+
+  const totalConversations = stats?.totalConversations?.value || 0;
+  const activeUsers = stats?.activeUsers?.value || 0;
+  const topLanguages = stats?.topLanguagesUsed?.value || 0;
+  const avgResponseTime = stats?.avgResponseTime?.value || 0;
+  const conversationsByLanguage = stats?.conversationsByLanguage || [];
+  const languageDistribution = stats?.languageDistribution || [];
+  const weeklyStats = stats?.weeklyStats || [];
+
+  const languageCounts: Record<string, number> = {};
+  messages.forEach((m) => {
+    if (!m?.language) return;
+    languageCounts[m.language] = (languageCounts[m.language] || 0) + 1;
+  });
+
+  // ---------------------- FIXED FUNCTION (Missing One) ----------------------
+  const downloadObjectAsJson = (data: any, filename = "admin-data.json") => {
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  // -------------------------------------------------------------------------
+
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-[#F5F6FA] p-8">
       <div className="max-w-7xl mx-auto">
-        {/* header */}
+
+        {/* HEADER */}
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-gray-900 mb-2">Admin Dashboard</h1>
-            <p className="text-gray-600">Monitor and manage your multilingual support platform</p>
+            <p className="text-gray-600">
+              Monitor and manage your multilingual support platform
+            </p>
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Time Range */}
             <div className="flex items-center gap-2 bg-white border border-gray-200 p-1 rounded-lg">
-              {(["24h", "7d", "30d", "90d"] as const).map((r) => (
-                <button key={r} onClick={() => setTimeRange(r)} className={`px-4 py-2 rounded-md ${timeRange === r ? "bg-[#007BFF] text-white" : "text-gray-600 hover:bg-gray-50"}`}>
+              {timeRanges.map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setTimeRange(r)}
+                  className={`px-4 py-2 rounded-md ${
+                    timeRange === r
+                      ? "bg-[#007BFF] text-white"
+                      : "text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
                   {r}
                 </button>
               ))}
             </div>
 
+            {/* Export Buttons */}
             <div className="flex items-center gap-2">
-              <Button variant="outline" className="flex items-center gap-2" onClick={() => exportFullReport("json")}>
+              <Button
+                variant="outline"
+                className="flex items-center gap-2"
+                onClick={() => exportFullReport("json")}
+              >
                 <Download className="w-4 h-4" /> Export JSON
               </Button>
-              <Button variant="outline" className="flex items-center gap-2" onClick={() => exportFullReport("csv")}>
+
+              <Button
+                variant="outline"
+                className="flex items-center gap-2"
+                onClick={() => exportFullReport("csv")}
+              >
                 <Download className="w-4 h-4" /> Export CSV
               </Button>
-              <Button variant="ghost" className="flex items-center gap-2" onClick={() => { setReportsOpen(true); setReportSearch(""); setReportLanguageFilter(""); setReportPage(1); }}>
+
+              <Button
+                variant="ghost"
+                className="flex items-center gap-2"
+                onClick={() => {
+                  setReportsOpen(true);
+                  setReportSearch("");
+                  setReportLanguageFilter("");
+                  setReportPage(1);
+                }}
+              >
                 <FileText className="w-4 h-4" /> View Reports
               </Button>
             </div>
           </div>
         </div>
 
-        {/* stat cards */}
+        {/* Stat Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {[
-            { title: "Total Conversations", value: totalConversations, icon: MessageSquare, color: "from-blue-500 to-blue-600", change: "+12.5%" },
-            { title: "Active Users", value: uniqueUsers, icon: Users, color: "from-green-500 to-green-600", change: "+8.2%" },
-            { title: "Top Languages Used", value: topLanguages, icon: Globe, color: "from-purple-500 to-purple-600", change: "+3" },
-            { title: "Avg Response Time", value: avgResponseTime, icon: TrendingUp, color: "from-orange-500 to-orange-600", change: "-0.3s" },
+            {
+              title: "Total Conversations",
+              value: totalConversations,
+              icon: MessageSquare,
+              color: "from-blue-500 to-blue-600",
+              change: "+12.5%",
+            },
+            {
+              title: "Active Users",
+              value: activeUsers,
+              icon: Users,
+              color: "from-green-500 to-green-600",
+              change: "+8.2%",
+            },
+            {
+              title: "Top Languages Used",
+              value: topLanguages,
+              icon: Globe,
+              color: "from-purple-500 to-purple-600",
+              change: "+3",
+            },
+            {
+              title: "Avg Response Time",
+              value: avgResponseTime,
+              icon: TrendingUp,
+              color: "from-orange-500 to-orange-600",
+              change: "-0.3s",
+            },
           ].map((stat, idx) => {
             const Icon = stat.icon;
             return (
@@ -418,7 +411,10 @@ export function AdminDashboard(): JSX.Element | null {
                         <TrendingUp className="w-4 h-4" /> {stat.change}
                       </div>
                     </div>
-                    <div className={`w-12 h-12 bg-gradient-to-br ${stat.color} rounded-lg flex items-center justify-center`}>
+
+                    <div
+                      className={`w-12 h-12 bg-gradient-to-br ${stat.color} rounded-lg flex items-center justify-center`}
+                    >
                       <Icon className="w-6 h-6 text-white" />
                     </div>
                   </div>
@@ -428,57 +424,148 @@ export function AdminDashboard(): JSX.Element | null {
           })}
         </div>
 
-        {/* quick actions */}
+        {/* Quick Actions */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          {/* Add Language */}
           <Card className="shadow-sm border-0 hover:shadow-md bg-gradient-to-br from-blue-50 to-white">
             <CardContent className="p-6 flex items-center gap-4">
               <div className="w-12 h-12 bg-[#007BFF] rounded-lg flex items-center justify-center">
                 <Plus className="text-white w-6 h-6" />
               </div>
+
               <div>
                 <h3 className="text-gray-900 mb-1">Add Language</h3>
                 <p className="text-gray-600">Enable new language support</p>
                 <div className="mt-3">
-                  <Button size="sm" onClick={addLanguage}>Add</Button>
+                  <Button size="sm" onClick={() => setAddLangOpen(true)}>
+                    Add
+                  </Button>
                 </div>
               </div>
             </CardContent>
           </Card>
 
+          {/* Upload FAQs */}
           <Card className="shadow-sm border-0 hover:shadow-md bg-gradient-to-br from-green-50 to-white">
             <CardContent className="p-6 flex items-center gap-4">
               <div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center">
                 <Upload className="text-white w-6 h-6" />
               </div>
+
               <div>
                 <h3 className="text-gray-900 mb-1">Upload FAQs</h3>
                 <p className="text-gray-600">Add knowledge base content</p>
+
                 <div className="mt-3">
-                  <input ref={fileRef} type="file" accept=".json,.txt,.docx" onChange={onFaqFileChange} className="hidden" />
-                  <Button size="sm" onClick={() => fileRef.current?.click()}>Upload</Button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".json,.txt"
+                    className="hidden"
+                    onChange={(e) => {
+                      onFaqFileChange(e);
+                      handleUploadFAQs();
+                    }}
+                  />
+
+                  <Button size="sm" onClick={() => fileInputRef.current?.click()}>
+                    Upload
+                  </Button>
                 </div>
               </div>
             </CardContent>
           </Card>
 
+          {/* View Reports */}
           <Card className="shadow-sm border-0 hover:shadow-md bg-gradient-to-br from-purple-50 to-white">
             <CardContent className="p-6 flex items-center gap-4">
               <div className="w-12 h-12 bg-purple-500 rounded-lg flex items-center justify-center">
                 <FileText className="text-white w-6 h-6" />
               </div>
+
               <div>
                 <h3 className="text-gray-900 mb-1">View Reports</h3>
                 <p className="text-gray-600">Detailed analytics & insights</p>
+
                 <div className="mt-3 flex gap-2">
-                  <Button size="sm" onClick={() => { setReportsOpen(true); setReportSearch(""); setReportLanguageFilter(""); setReportPage(1); }}>Open</Button>
-                  <Button size="sm" variant="outline" onClick={clearMessages}>Clear Messages</Button>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setReportsOpen(true);
+                      setReportSearch("");
+                      setReportLanguageFilter("");
+                      setReportPage(1);
+                    }}
+                  >
+                    Open
+                  </Button>
+
+                  <Button size="sm" variant="outline" onClick={clearMessages}>
+                    Clear Messages
+                  </Button>
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* charts */}
+        {/* Add Language Modal */}
+        {addLangOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
+            <div className="bg-white w-full max-w-md rounded-xl shadow-xl overflow-hidden">
+              <div className="p-4 border-b flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Add Language</h3>
+
+                <button
+                  onClick={() => setAddLangOpen(false)}
+                  className="p-2 rounded hover:bg-gray-100"
+                >
+                  <XIcon />
+                </button>
+              </div>
+
+              <div className="p-4">
+                <label className="block text-sm text-gray-600 mb-2">
+                  Language name
+                </label>
+
+                <input
+                  value={newLangName}
+                  onChange={(e) => setNewLangName(e.target.value)}
+                  className="w-full border rounded px-3 py-2 mb-3"
+                  placeholder="e.g. Japanese"
+                />
+
+                <label className="block text-sm text-gray-600 mb-2">
+                  Language code
+                </label>
+
+                <input
+                  value={newLangCode}
+                  onChange={(e) => setNewLangCode(e.target.value)}
+                  className="w-full border rounded px-3 py-2"
+                  placeholder="e.g. ja"
+                />
+              </div>
+
+              <div className="p-4 flex items-center justify-end gap-2 border-t">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setAddLangOpen(false)}
+                >
+                  Cancel
+                </Button>
+
+                <Button size="sm" onClick={handleAddLanguage}>
+                  Add
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           <Card className="lg:col-span-2 shadow-sm border-0">
             <CardHeader>
@@ -487,6 +574,7 @@ export function AdminDashboard(): JSX.Element | null {
                 Conversations by Language
               </CardTitle>
             </CardHeader>
+
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={conversationsByLanguage}>
@@ -507,11 +595,19 @@ export function AdminDashboard(): JSX.Element | null {
                 Distribution
               </CardTitle>
             </CardHeader>
+
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
-                  <Pie data={languageDistribution} innerRadius={55} outerRadius={90} dataKey="value">
-                    {languageDistribution.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                  <Pie
+                    data={languageDistribution}
+                    innerRadius={55}
+                    outerRadius={90}
+                    dataKey="value"
+                  >
+                    {languageDistribution.map((entry, i) => (
+                      <Cell key={i} fill={entry.color} />
+                    ))}
                   </Pie>
                 </PieChart>
               </ResponsiveContainer>
@@ -520,9 +616,13 @@ export function AdminDashboard(): JSX.Element | null {
                 {languageDistribution.map((item, i) => (
                   <div key={i} className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
+                      <div
+                        className="w-3 h-3 rounded-full"
+                        style={{ backgroundColor: item.color }}
+                      />
                       <span className="text-gray-600">{item.name}</span>
                     </div>
+
                     <span className="text-gray-900">{item.value}%</span>
                   </div>
                 ))}
@@ -531,14 +631,15 @@ export function AdminDashboard(): JSX.Element | null {
           </Card>
         </div>
 
-        {/* weekly */}
-        <Card className="shadow-sm border-0">
+        {/* Weekly Chart */}
+        <Card className="shadow-sm border-0 mb-8">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-[#007BFF]" />
               Weekly Activity
             </CardTitle>
           </CardHeader>
+
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={weeklyStats}>
@@ -546,113 +647,171 @@ export function AdminDashboard(): JSX.Element | null {
                 <XAxis dataKey="day" stroke="#94a3b8" />
                 <YAxis stroke="#94a3b8" />
                 <Tooltip />
-                <Line type="monotone" dataKey="conversations" stroke="#007BFF" strokeWidth={3} />
-                <Line type="monotone" dataKey="translations" stroke="#00B5AD" strokeWidth={3} />
+
+                <Line
+                  type="monotone"
+                  dataKey="conversations"
+                  stroke="#007BFF"
+                  strokeWidth={3}
+                />
+
+                <Line
+                  type="monotone"
+                  dataKey="translations"
+                  stroke="#00B5AD"
+                  strokeWidth={3}
+                />
               </LineChart>
             </ResponsiveContainer>
 
             <div className="mt-4 flex flex-wrap items-center gap-3">
-              <Button size="sm" onClick={simulateConversation}>Simulate Conversation</Button>
-              <Button size="sm" variant="outline" onClick={() => downloadObjectAsJson({ messages, languages, faqs }, "admin-data.json")}>Download Data</Button>
+              <Button size="sm" onClick={simulateConversation}>
+                Simulate Conversation
+              </Button>
+
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  downloadObjectAsJson(
+                    { messages, languages, faqs },
+                    "admin-data.json"
+                  )
+                }
+              >
+                Download Data
+              </Button>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Reports modal */}
+      {/* Reports Modal */}
       {reportsOpen && (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-6">
           <div className="bg-white w-full max-w-6xl rounded-xl shadow-xl overflow-hidden">
-            {/* header */}
             <div className="flex items-center justify-between p-4 border-b">
               <div>
                 <h3 className="text-lg font-semibold">Reports</h3>
-                <p className="text-sm text-gray-500">Dynamic analytics & message explorer</p>
+                <p className="text-sm text-gray-500">
+                  Dynamic analytics & message explorer
+                </p>
               </div>
 
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-2 border rounded px-3 py-1">
-                  <label className="text-sm text-gray-600">Language</label>
-                  <select value={reportLanguageFilter} onChange={(e) => { setReportLanguageFilter(e.target.value); setReportPage(1); }} className="ml-2 bg-transparent outline-none">
-                    <option value="">All</option>
-                    {Object.keys(languageCounts).map((l) => <option key={l} value={l}>{l}</option>)}
-                    {languages.filter((l) => !Object.keys(languageCounts).includes(l)).map((l) => <option key={l} value={l}>{l}</option>)}
-                  </select>
-                </div>
-
-                <div className="flex items-center gap-2 border rounded px-3 py-1">
-                  <input
-                    placeholder="Search messages..."
-                    value={reportSearch}
-                    onChange={(e) => { setReportSearch(e.target.value); setReportPage(1); }}
-                    className="outline-none text-sm"
-                  />
-                  <button className="text-sm text-gray-600" onClick={() => { setReportSearch(""); setReportLanguageFilter(""); setReportPage(1); }}>Reset</button>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Button size="sm" variant="outline" onClick={() => exportModalFiltered("json")}>
-                    <Download className="w-4 h-4" /> JSON
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => exportModalFiltered("csv")}>
-                    <Download className="w-4 h-4" /> CSV
-                  </Button>
-                  <Button size="sm" onClick={() => { setReportsOpen(false); setReportPage(1); }}>Close</Button>
-                </div>
-
-                <button onClick={() => { setReportsOpen(false); setReportPage(1); }} className="ml-2 p-2 rounded hover:bg-gray-100">
-                  <XIcon />
-                </button>
-              </div>
+              <button
+                onClick={() => {
+                  setReportsOpen(false);
+                  setReportPage(1);
+                }}
+                className="p-2 rounded hover:bg-gray-100"
+              >
+                <XIcon />
+              </button>
             </div>
 
-            {/* body */}
+            {/* Body */}
             <div className="p-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
-              {/* left: summary cards */}
+              {/* Summary Panel */}
               <div className="lg:col-span-1 space-y-3">
                 <div className="bg-gray-50 p-4 rounded">
                   <h4 className="text-sm text-gray-600">Summary</h4>
-                  <div className="mt-2 text-gray-900">Total messages (time filter): <span className="font-medium">{filteredByTime.length}</span></div>
-                  <div className="text-gray-900">Filtered messages: <span className="font-medium">{modalFilteredMessages.length}</span></div>
-                  <div className="text-gray-900">Active users: <span className="font-medium">{userCount}</span></div>
-                  <div className="text-gray-900">Avg response time: <span className="font-medium">{avgResponseTime}</span></div>
+                  <div className="mt-2 text-gray-900">
+                    Total messages:
+                    <span className="font-medium ml-1">
+                      {filteredMessages.length}
+                    </span>
+                  </div>
+
+                  <div className="text-gray-900">
+                    Filtered:
+                    <span className="font-medium ml-1">
+                      {modalFilteredMessages.length}
+                    </span>
+                  </div>
+
+                  <div className="text-gray-900">
+                    Active users:
+                    <span className="font-medium ml-1">{activeUsers}</span>
+                  </div>
+
+                  <div className="text-gray-900">
+                    Avg response:
+                    <span className="font-medium ml-1">
+                      {avgResponseTime}s
+                    </span>
+                  </div>
                 </div>
 
+                {/* Language Stats Panel */}
                 <div className="bg-gray-50 p-4 rounded">
                   <h4 className="text-sm text-gray-600 mb-2">Top Languages</h4>
+
                   <div className="space-y-2">
-                    {Object.keys(languageCounts).length === 0 && languages.map((l) => (
-                      <div key={l} className="flex items-center justify-between text-sm text-gray-700">
-                        <div>{l}</div>
-                        <div>0</div>
-                      </div>
-                    ))}
                     {Object.keys(languageCounts).map((l) => (
-                      <div key={l} className="flex items-center justify-between text-sm text-gray-700">
+                      <div
+                        key={l}
+                        className="flex items-center justify-between text-sm text-gray-700"
+                      >
                         <div>{l}</div>
                         <div>{languageCounts[l]}</div>
                       </div>
                     ))}
+
+                    {/* Empty state */}
+                    {Object.keys(languageCounts).length === 0 &&
+                      languages.map((l: any) => (
+                        <div
+                          key={l}
+                          className="flex items-center justify-between text-sm text-gray-700"
+                        >
+                          <div>{l}</div>
+                          <div>0</div>
+                        </div>
+                      ))}
                   </div>
                 </div>
 
+                {/* Actions */}
                 <div className="bg-gray-50 p-4 rounded">
                   <h4 className="text-sm text-gray-600 mb-2">Quick actions</h4>
+
                   <div className="flex flex-col gap-2">
-                    <Button size="sm" onClick={() => exportFullReport("json")}>Download full report (JSON)</Button>
-                    <Button size="sm" variant="outline" onClick={() => exportFullReport("csv")}>Download full report (CSV)</Button>
-                    <Button size="sm" onClick={simulateConversation}>Simulate conversation</Button>
-                    <Button size="sm" variant="outline" onClick={clearMessages}>Clear all messages</Button>
+                    <Button
+                      size="sm"
+                      onClick={() => downloadJSON(stats, "full-report.json")}
+                    >
+                      Download report (JSON)
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => downloadCSV(messages, "full-report.csv")}
+                    >
+                      Download report (CSV)
+                    </Button>
+
+                    <Button size="sm" onClick={simulateConversation}>
+                      Simulate conversation
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={clearMessages}
+                    >
+                      Clear messages
+                    </Button>
                   </div>
                 </div>
               </div>
 
-              {/* middle+right: message table (2 cols span) */}
+              {/* Messages Table */}
               <div className="lg:col-span-2">
                 <div className="mb-2 flex items-center justify-between">
-                  <div className="text-sm text-gray-600">Showing {modalFilteredMessages.length} messages — page {reportPage} / {pageCount}</div>
-                  <div className="flex items-center gap-2">
-                    <select value={rowsPerPage} onChange={() => { /* rowsPerPage const */ }} className="hidden" />
+                  <div className="text-sm text-gray-600">
+                    Showing {modalFilteredMessages.length} messages — page{" "}
+                    {reportPage} / {pageCount}
                   </div>
                 </div>
 
@@ -660,49 +819,135 @@ export function AdminDashboard(): JSX.Element | null {
                   <table className="min-w-full text-left">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-3 py-2 text-sm text-gray-600">Time</th>
-                        <th className="px-3 py-2 text-sm text-gray-600">Sender</th>
-                        <th className="px-3 py-2 text-sm text-gray-600">Language</th>
-                        <th className="px-3 py-2 text-sm text-gray-600">Message</th>
+                        <th className="px-3 py-2 text-sm text-gray-600">
+                          Time
+                        </th>
+                        <th className="px-3 py-2 text-sm text-gray-600">
+                          Sender
+                        </th>
+                        <th className="px-3 py-2 text-sm text-gray-600">
+                          Language
+                        </th>
+                        <th className="px-3 py-2 text-sm text-gray-600">
+                          Message
+                        </th>
                       </tr>
                     </thead>
+
                     <tbody>
-                      {pagedMessages.length === 0 && (
+                      {modalFilteredMessages.length === 0 && (
                         <tr>
-                          <td colSpan={4} className="px-3 py-6 text-center text-sm text-gray-500">No messages found</td>
+                          <td
+                            colSpan={4}
+                            className="px-3 py-6 text-center text-sm text-gray-500"
+                          >
+                            No messages found
+                          </td>
                         </tr>
                       )}
-                      {pagedMessages.map((m: Message) => (
-                        <tr key={m.id || `${m.timestamp}-${Math.random()}`} className="border-t">
-                          <td className="px-3 py-3 text-sm text-gray-700">{new Date(m.timestamp || 0).toLocaleString()}</td>
-                          <td className="px-3 py-3 text-sm text-gray-700">{m.sender}</td>
-                          <td className="px-3 py-3 text-sm text-gray-700">{m.language || "Unknown"}</td>
-                          <td className="px-3 py-3 text-sm text-gray-700 whitespace-pre-wrap">{m.text}</td>
+
+                      {modalFilteredMessages.map((m: any) => (
+                        <tr
+                          key={m.id || `${m.timestamp}-${Math.random()}`}
+                          className="border-t"
+                        >
+                          <td className="px-3 py-3 text-sm text-gray-700">
+                            {new Date(m.timestamp || 0).toLocaleString()}
+                          </td>
+
+                          <td className="px-3 py-3 text-sm text-gray-700">
+                            {m.sender}
+                          </td>
+
+                          <td className="px-3 py-3 text-sm text-gray-700">
+                            {m.language || "Unknown"}
+                          </td>
+
+                          <td className="px-3 py-3 text-sm text-gray-700 whitespace-pre-wrap">
+                            {m.text}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
 
-                {/* pagination */}
+                {/* Pagination */}
                 <div className="mt-3 flex items-center justify-between">
-                  <div className="text-sm text-gray-600">Page {reportPage} of {pageCount}</div>
+                  <div className="text-sm text-gray-600">
+                    Page {reportPage} of {pageCount}
+                  </div>
+
                   <div className="flex items-center gap-2">
-                    <Button size="sm" variant="outline" onClick={() => setReportPage((p) => Math.max(1, p - 1))}>Prev</Button>
-                    <Button size="sm" onClick={() => setReportPage((p) => Math.min(pageCount, p + 1))}>Next</Button>
-                    <Button size="sm" variant="ghost" onClick={() => { setReportPage(1); setReportSearch(""); setReportLanguageFilter(""); }}>Reset</Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setReportPage((p) => Math.max(1, p - 1))}
+                    >
+                      Prev
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        setReportPage((p) => Math.min(pageCount, p + 1))
+                      }
+                    >
+                      Next
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setReportPage(1);
+                        setReportSearch("");
+                        setReportLanguageFilter("");
+                      }}
+                    >
+                      Reset
+                    </Button>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* footer */}
+            {/* Footer */}
             <div className="flex items-center justify-between p-4 border-t">
-              <div className="text-sm text-gray-600">Generated at: {new Date().toLocaleString()}</div>
+              <div className="text-sm text-gray-600">
+                Generated at: {new Date().toLocaleString()}
+              </div>
+
               <div className="flex items-center gap-2">
-                <Button size="sm" variant="outline" onClick={() => exportModalFiltered("json")}>Download filtered (JSON)</Button>
-                <Button size="sm" variant="outline" onClick={() => exportModalFiltered("csv")}>Download filtered (CSV)</Button>
-                <Button size="sm" onClick={() => { setReportsOpen(false); setReportPage(1); }}>Close</Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    downloadJSON(modalFilteredMessages, "filtered.json")
+                  }
+                >
+                  JSON
+                </Button>
+
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    downloadCSV(modalFilteredMessages, "filtered.csv")
+                  }
+                >
+                  CSV
+                </Button>
+
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setReportsOpen(false);
+                    setReportPage(1);
+                  }}
+                >
+                  Close
+                </Button>
               </div>
             </div>
           </div>
@@ -711,3 +956,5 @@ export function AdminDashboard(): JSX.Element | null {
     </div>
   );
 }
+
+export default AdminDashboard;
