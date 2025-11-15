@@ -5,8 +5,8 @@ import { KnowledgeBase } from './components/KnowledgeBase';
 import { AdminDashboard } from './components/AdminDashboard';
 import { HowItWorks } from './components/HowItWorks';
 import { Globe, MessageSquare, BookOpen, LayoutDashboard, Workflow } from 'lucide-react';
+import { Page } from "./types/Page";
 
-type Page = 'landing' | 'chat' | 'knowledge' | 'dashboard' | 'howitworks';
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<Page>('landing');
@@ -28,9 +28,9 @@ export default function App() {
     }
   };
 
-  if (currentPage === 'landing') {
-    return renderPage();
-  }
+  // if (currentPage === 'landing') {
+  //   return renderPage();
+  // }
 
   return (
     <div className="min-h-screen bg-[#F5F6FA]">

@@ -1,8 +1,9 @@
 import { Globe, MessageSquare, BarChart3, Zap, Shield, Users } from 'lucide-react';
 import { Button } from './ui/button';
 import { ImageWithFallback } from './figma/ImageWithFallback';
+import { Page } from "../types/Page";
 
-type Page = 'landing' | 'chat' | 'knowledge' | 'dashboard' | 'howitworks';
+
 
 interface LandingPageProps {
   onNavigate: (page: Page) => void;
