@@ -1,4 +1,4 @@
-"use client";
+git rm -r --cached node_modules"use client";
 
 import * as React from "react";
 import * as ProgressPrimitive from "@radix-ui/react-progress";
