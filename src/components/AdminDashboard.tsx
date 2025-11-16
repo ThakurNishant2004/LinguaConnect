@@ -83,7 +83,7 @@ export function AdminDashboard() {
     <div className="min-h-[calc(100vh-4rem)] bg-[#F5F6FA] p-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        {/* <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-gray-900 mb-2">Admin Dashboard</h1>
             <p className="text-gray-600">Monitor and manage your multilingual support platform</p>
@@ -109,6 +109,10 @@ export function AdminDashboard() {
               Export
             </Button>
           </div>
+        </div> */}
+        <div>
+            <h1 className="text-gray-900 mb-2">Admin Dashboard</h1>
+            <p className="text-gray-600 mb-3">Monitor and manage your multilingual support platform</p>
         </div>
 
         {/* Stats Cards */}
