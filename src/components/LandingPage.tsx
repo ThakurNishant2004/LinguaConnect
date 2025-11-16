@@ -1,6 +1,10 @@
 // LandingPage.tsx
 import { useState, useEffect } from "react";
+<<<<<<< HEAD
+import { Globe, Menu, X, MessageSquare, BarChart3, Zap, Shield, Users } from "lucide-react";
+=======
 import { Globe, MessageSquare, BarChart3, Zap, Shield, Users } from "lucide-react";
+>>>>>>> main
 import { Button } from "./ui/button";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { AuthModal } from "./AuthModal";
@@ -29,6 +33,10 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
 
   // ⭐ Dynamic 100+ languages counter
   const [langCount, setLangCount] = useState(0);
+<<<<<<< HEAD
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+=======
+>>>>>>> main
 
   useEffect(() => {
     let start = 0;
@@ -160,6 +168,368 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
 
   return (
     <>
+<<<<<<< HEAD
+      <div className="min-h-screen bg-gradient-to-br from-[#007BFF] via-[#0056b3] to-[#00B5AD] overflow-x-hidden">
+        
+    {/* ---------------- NAVBAR ---------------- */}
+<nav className="absolute top-0 left-0 right-0 z-50">
+  <div className="w-full px-4 sm:px-6 lg:px-8">
+    <div className="flex items-center justify-between h-16">
+
+      {/* LOGO */}
+      <div className="flex items-center gap-2">
+        <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center">
+          <Globe className="w-6 h-6 text-[#007BFF]" />
+        </div>
+        <span className="text-white text-lg font-medium">LinguaConnect</span>
+      </div>
+
+      {/* DESKTOP MENU */}
+      <div className="hidden md:flex items-center gap-4">
+
+        <button
+          onClick={() => onNavigate("howitworks")}
+          className="text-white hover:text-blue-100 transition"
+        >
+          How It Works
+        </button>
+
+        <button
+          onClick={() => onNavigate("knowledge")}
+          className="text-white hover:text-blue-100 transition"
+        >
+          Knowledge Base
+        </button>
+
+        <Button
+          size="lg"
+          onClick={() => isAuthenticated && onNavigate("dashboard")}
+          disabled={!isAuthenticated}
+          className={
+            "bg-white text-[#007BFF] px-4 py-1.5 rounded-lg " +
+            (!isAuthenticated ? "opacity-50 cursor-not-allowed" : "hover:bg-blue-50")
+          }
+        >
+          <BarChart3 className="w-5 h-5 mr-2" />
+          {isAuthenticated ? "Dashboard" : "Login to View Dashboard"}
+        </Button>
+
+        {!isAuthenticated && (
+          <>
+            <button
+              onClick={openLoginModal}
+              className="text-white border border-white/40 px-4 py-1.5 rounded-lg hover:bg-white/10 transition"
+            >
+              Login
+            </button>
+
+            <button
+              onClick={openSignupModal}
+              className="bg-white text-[#007BFF] px-4 py-1.5 rounded-lg hover:bg-blue-50 transition"
+            >
+              Sign Up
+            </button>
+          </>
+        )}
+
+        {isAuthenticated && (
+          <>
+            <div className="text-white text-sm px-3 py-1 rounded-lg flex items-center gap-3 select-none">
+              <span className="opacity-90">Hello,</span>
+              <span className="font-medium">{username || "User"}</span>
+              <span className="animate-wave">👋</span>
+            </div>
+
+            <button
+              onClick={handleLogout}
+              className="text-white border border-white/40 px-4 py-1.5 rounded-lg hover:bg-white/10 transition"
+            >
+              Logout
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* MOBILE MENU ICON */}
+      <div className="md:hidden flex items-center">
+        <button
+          onClick={() => setIsMobileMenuOpen(true)}
+          className="text-white text-3xl"
+        >
+          ☰
+        </button>
+      </div>
+    </div>
+  </div>
+
+  {/* ******** MOBILE MENU ******** */}
+  {isMobileMenuOpen && (
+<div className="fixed inset-0 z-[1000] flex justify-end bg-black/30 backdrop-blur-sm pr-3 pt-3">
+
+      {/* RIGHT PANEL */}
+<div className="w-64 bg-white/10 backdrop-blur-xl border border-white/20 p-5 pt-10 h-full rounded-xl mr-3 mt-3">
+        {/* CLOSE BUTTON */}
+        <button
+        className="absolute top-2 right-2 text-white hover:text-blue-200"
+          onClick={() => setIsMobileMenuOpen(false)}
+        >
+          ✕
+        </button>
+
+        <div className="flex flex-col space-y-6 mt-6">
+
+          <button
+            onClick={() => {
+              onNavigate("howitworks");
+              setIsMobileMenuOpen(false);
+            }}
+            className="text-white text-left"
+          >
+            How It Works
+          </button>
+
+          <button
+            onClick={() => {
+              onNavigate("knowledge");
+              setIsMobileMenuOpen(false);
+            }}
+            className="text-white text-left"
+          >
+            Knowledge Base
+          </button>
+
+          <Button
+            size="sm"
+            onClick={() => {
+              if (isAuthenticated) onNavigate("dashboard");
+              setIsMobileMenuOpen(false);
+            }}
+            disabled={!isAuthenticated}
+            className={
+              "bg-white text-[#007BFF] w-full text-left " +
+              (!isAuthenticated ? "opacity-50 cursor-not-allowed" : "")
+            }
+          >
+            Dashboard
+          </Button>
+
+          {!isAuthenticated && (
+            <>
+              <button
+                onClick={() => {
+                  openLoginModal();
+                  setIsMobileMenuOpen(false);
+                }}
+                className="text-white border border-white/40 px-3 py-1.5 rounded-lg"
+              >
+                Login
+              </button>
+
+              <button
+                onClick={() => {
+                  openSignupModal();
+                  setIsMobileMenuOpen(false);
+                }}
+                className="bg-white text-[#007BFF] px-3 py-1.5 rounded-lg"
+              >
+                Sign Up
+              </button>
+            </>
+          )}
+
+          {isAuthenticated && (
+            <>
+              <div className="text-white text-sm flex gap-2 items-center">
+                Hello, <span className="font-medium">{username}</span> 👋
+              </div>
+              <button
+                onClick={() => {
+                  handleLogout();
+                  setIsMobileMenuOpen(false);
+                }}
+                className="text-white border border-white/40 px-3 py-1.5 rounded-lg"
+              >
+                Logout
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )}
+</nav>
+
+
+
+        {/* ---------------- HERO SECTION ---------------- */}
+        <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
+
+          <div className="absolute inset-0 opacity-10">
+            <ImageWithFallback
+              src="https://images.unsplash.com/photo-1609868714484-2b2556006301"
+              alt="World Map"
+              className="w-full h-full object-cover"
+            />
+          </div>
+
+          {floatingTexts.map((item, i) => (
+            <div
+              key={i}
+              className="absolute animate-float"
+              style={{
+                top: item.top,
+                left: item.left,
+                right: item.right,
+                animationDelay: item.delay,
+              }}
+            >
+              <div className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-lg border border-white/20">
+                <p className="text-white">{item.text}</p>
+              </div>
+            </div>
+          ))}
+
+          <div className="relative z-10 max-w-4xl mx-auto px-4 text-center">
+            <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-md px-4 py-2 rounded-full border border-white/20 mb-6">
+              <Zap className="w-4 h-4 text-yellow-300" />
+              <span className="text-white">Powered by Lingo CLI</span>
+            </div>
+
+            <h1 className="text-white text-4xl sm:text-5xl font-semibold mb-4">
+              Talk to anyone, anywhere — in your language.
+            </h1>
+
+            <p className="text-blue-100 mb-8 max-w-2xl mx-auto">
+              AI-powered multilingual support for global businesses.
+            </p>
+
+            <div className="flex items-center justify-center gap-4 flex-wrap">
+
+              {/* ⭐ CHAT BUTTON LOCKED UNTIL LOGIN ⭐ */}
+              <Button
+                size="lg"
+                onClick={() => isAuthenticated && onNavigate("chat")}
+                disabled={!isAuthenticated}
+                className={
+                  "bg-white text-[#007BFF] " +
+                  (!isAuthenticated ? "opacity-50 cursor-not-allowed" : "hover:bg-blue-50")
+                }
+              >
+                <MessageSquare className="w-5 h-5 mr-2" />
+                {isAuthenticated ? "Start Chat" : "Login to Start Chat"}
+              </Button>
+
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={startDemo}
+                className="bg-transparent border-white text-white hover:bg-white/10"
+              >
+                Try Demo
+              </Button>
+            </div>
+
+            {/* COUNTERS */}
+            <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8">
+              <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
+                <Globe className="w-8 h-8 text-white mx-auto mb-2" />
+                <p className="text-white">{langCount}+ Languages</p>
+                <p className="text-blue-100">Real-time translation</p>
+              </div>
+
+              <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
+                <Users className="w-8 h-8 text-white mx-auto mb-2" />
+                <p className="text-white">{userCount.toLocaleString()}+ Users</p>
+                <p className="text-blue-100">Trusted worldwide</p>
+              </div>
+
+              <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
+                <Shield className="w-8 h-8 text-white mx-auto mb-2" />
+                <p className="text-white">Enterprise Security</p>
+                <p className="text-blue-100">SOC 2 compliant</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* FEATURES SECTION */}
+        <section className="bg-white py-20">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-12">
+              <h2 className="text-gray-900 mb-4">Why Choose LinguaConnect?</h2>
+              <p className="text-gray-600 max-w-2xl mx-auto">
+                Everything you need to provide world-class multilingual support
+              </p>
+            </div>
+
+            {/* 6 Feature Cards — COPY OF YOUR UI */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+
+              <div className="bg-gradient-to-br from-blue-50 to-white rounded-xl p-8 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                <div className="w-12 h-12 bg-gradient-to-br from-[#007BFF] to-[#00B5AD] rounded-lg flex items-center justify-center mb-4">
+                  <MessageSquare className="w-6 h-6 text-white" />
+                </div>
+                <h3 className="text-gray-900 mb-2">Real-time Translation</h3>
+                <p className="text-gray-600">
+                  Instant AI-powered translation across 100+ languages
+                </p>
+              </div>
+
+              <div className="bg-gradient-to-br from-blue-50 to-white rounded-xl p-8 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                <div className="w-12 h-12 bg-gradient-to-br from-[#007BFF] to-[#00B5AD] rounded-lg flex items-center justify-center mb-4">
+                  <BarChart3 className="w-6 h-6 text-white" />
+                </div>
+                <h3 className="text-gray-900 mb-2">Analytics Dashboard</h3>
+                <p className="text-gray-600">
+                  Track conversations, languages, satisfaction metrics
+                </p>
+              </div>
+
+              <div className="bg-gradient-to-br from-blue-50 to-white rounded-xl p-8 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                <div className="w-12 h-12 bg-gradient-to-br from-[#007BFF] to-[#00B5AD] rounded-lg flex items-center justify-center mb-4">
+                  <Globe className="w-6 h-6 text-white" />
+                </div>
+                <h3 className="text-gray-900 mb-2">Multilingual Knowledge Base</h3>
+                <p className="text-gray-600">
+                  Automated FAQ translation and content management
+                </p>
+              </div>
+
+              <div className="bg-gradient-to-br from-blue-50 to-white rounded-xl p-8 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                <div className="w-12 h-12 bg-gradient-to-br from-[#007BFF] to-[#00B5AD] rounded-lg flex items-center justify-center mb-4">
+                  <Zap className="w-6 h-6 text-white" />
+                </div>
+                <h3 className="text-gray-900 mb-2">Lightning Fast</h3>
+                <p className="text-gray-600">Sub-second response times</p>
+              </div>
+
+              <div className="bg-gradient-to-br from-blue-50 to-white rounded-xl p-8 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                <div className="w-12 h-12 bg-gradient-to-br from-[#007BFF] to-[#00B5AD] rounded-lg flex items-center justify-center mb-4">
+                  <Shield className="w-6 h-6 text-white" />
+                </div>
+                <h3 className="text-gray-900 mb-2">Enterprise Security</h3>
+                <p className="text-gray-600">End-to-end encryption</p>
+              </div>
+
+              <div className="bg-gradient-to-br from-blue-50 to-white rounded-xl p-8 border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                <div className="w-12 h-12 bg-gradient-to-br from-[#007BFF] to-[#00B5AD] rounded-lg flex items-center justify-center mb-4">
+                  <Users className="w-6 h-6 text-white" />
+                </div>
+                <h3 className="text-gray-900 mb-2">Team Collaboration</h3>
+                <p className="text-gray-600">Role-based access, routing</p>
+              </div>
+
+            </div>
+          </div>
+        </section>
+
+        {/* Animations */}
+        <style>{`
+          @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-18px); }
+          }
+=======
       <div className="min-h-screen bg-gradient-to-br from-[#007BFF] via-[#0056b3] to-[#00B5AD] ">
         
         {/* ---------------- NAVBAR ---------------- */}
@@ -410,6 +780,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
             0%, 100% { transform: translateY(0); }
             50% { transform: translateY(-18px); }
           }
+>>>>>>> main
           .animate-float {
             animation: float 3s ease-in-out infinite;
           }
@@ -440,3 +811,10 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
     </>
   );
 }
+<<<<<<< HEAD
+
+
+// Default export
+export default LandingPage;
+=======
+>>>>>>> main

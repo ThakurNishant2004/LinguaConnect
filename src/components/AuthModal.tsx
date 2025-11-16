@@ -1,3 +1,5 @@
+<<<<<<< HEAD
+=======
 // // AuthModal.tsx
 // import React, { useEffect, useState } from "react";
 // import { X } from "lucide-react";
@@ -340,6 +342,7 @@
 
 
 // **********************
+>>>>>>> main
 // AuthModal.tsx
 import React, { useEffect, useState } from "react";
 import { X } from "lucide-react";
@@ -401,6 +404,21 @@ export function AuthModal({
     };
   }, [isOpen]);
 
+<<<<<<< HEAD
+  useEffect(() => {
+  if (!isOpen) return;
+  // add class and mark main app as hidden for screen readers
+  document.body.classList.add("modal-open");
+  document.getElementById("root")?.setAttribute("aria-hidden", "true");
+  return () => {
+    document.body.classList.remove("modal-open");
+    document.getElementById("root")?.removeAttribute("aria-hidden");
+  };
+}, [isOpen]);
+
+
+=======
+>>>>>>> main
   if (!isOpen || !mounted) return null;
 
   const target = document.getElementById("modal-root") ?? document.body;
@@ -784,4 +802,8 @@ export function AuthModal({
   );
 
   return createPortal(overlay, target);
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> main

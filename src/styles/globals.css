@@ -120,10 +120,6 @@
 }
 
 @layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-
   body {
     @apply bg-background text-foreground;
   }
@@ -133,12 +129,27 @@
  * Base typography. This is not applied to elements which have an ancestor with a Tailwind text class.
  */
 @layer base {
-  :where(:not(:has([class*=' text-']), :not(:has([class^='text-'])))) {
-    h1 {
-      font-size: var(--text-2xl);
-      font-weight: var(--font-weight-medium);
-      line-height: 1.5;
-    }
+/* Keep the portal container simple; modal handles fixed positioning */
+#modal-root {
+  position: relative;
+  z-index: 9999;
+}
+
+/* Prevent global typography/layout overrides from leaking into modal */
+#modal-root .auth-modal * {
+  font-size: initial !important;
+  line-height: initial !important;
+  font-weight: initial !important;
+  color: inherit !important;
+}
+
+/* Optional: guard against accidental transforms that break fixed positioning */
+html, body {
+  transform: none !important;
+}
+
+
+
 
     h2 {
       font-size: var(--text-xl);
@@ -236,6 +247,93 @@ html {
   border: 1px solid rgba(2,6,23,0.06);
 }
 
+/* overlay covers viewport and controls placement responsively */
+/* Paste this into your global CSS (replace previous overlay/container rules) */
+.auth-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647; /* extremely high */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.45);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  pointer-events: auto;
+  transform: none !important;
+}
+
+/* Desktop: top-right placement */
+@media (min-width: 641px) {
+  .auth-modal-overlay {
+    align-items: flex-start;      /* push to top */
+    justify-content: flex-end;    /* push to right */
+  }
+}
+
+/* modal container must be relative inside overlay */
+.auth-modal-container {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  margin-top: 4rem; /* desktop offset */
+  background: #fff;
+  border-radius: 12px;
+  padding: 1.25rem;
+  box-shadow: 0 10px 30px rgba(2,6,23,0.2);
+  pointer-events: auto;
+}
+
+/* Small screens: center and remove top offset */
+@media (max-width: 640px) {
+  .auth-modal-overlay { padding: 0.75rem; }
+  .auth-modal-container {
+    margin-top: 0;
+    width: calc(100% - 2rem);
+    max-width: 420px;
+  }
+}
+
+/* Safety: ensure modal children don't inherit global typography overrides */
+#modal-root .auth-modal * {
+  font-size: initial !important;
+  line-height: initial !important;
+  font-weight: initial !important;
+  color: inherit !important;
+}
+
+
+/* simple utility styles used in the component */
+.auth-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #6b7280;
+}
+
+.auth-modal-title { font-size: 1.125rem; font-weight: 600; margin-bottom: 6px; }
+.auth-modal-sub { color: #6b7280; margin-bottom: 12px; font-size: 0.875rem; }
+.auth-modal-error { color: #dc2626; margin-bottom: 10px; font-size: 0.875rem; }
+
+.auth-field { display: block; margin-bottom: 8px; font-size: 0.875rem; }
+.auth-field input {
+  display: block;
+  width: 100%;
+  padding: 0.5rem;
+  margin-top: 6px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  box-sizing: border-box;
+}
+
+.auth-actions { display: flex; gap: 8px; margin-top: 12px; }
+.auth-btn { flex: 1; padding: 0.6rem; border-radius: 8px; border: none; cursor: pointer; }
+.auth-btn.primary { background: #007BFF; color: #fff; }
+.auth-btn.outline { background: transparent; border: 1px solid #d1d5db; color: #111827; }
+
 /* ========================= */
 /* Mic Waveform Animations   */
 /* ========================= */
@@ -262,3 +360,29 @@ html {
     transform: scaleY(0.3);
   }
 }
+
+/* STOP global typography + layout rules from touching the modal */
+#modal-root .auth-modal * {
+  font-size: initial !important;
+  line-height: initial !important;
+  font-weight: initial !important;
+  color: inherit !important;
+}
+
+/* visually dim and disable interactions on the app while modal is open */
+body.modal-open #root {
+  filter: blur(3px) brightness(0.7);
+  pointer-events: none;       /* prevents clicks on background */
+  user-select: none;
+  touch-action: none;
+  -webkit-user-select: none;
+}
+
+/* keep modal interactive */
+body.modal-open #modal-root,
+.auth-modal-overlay,
+.auth-modal-container {
+  pointer-events: auto;
+}
+
+
