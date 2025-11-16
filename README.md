@@ -21,10 +21,14 @@ It supports 100+ languages, automatic FAQ translation, report generation, chat e
 - Semantic search  
 
 ### 🖼 Image Upload + Preview
-- Upload up to 5 images  
-- S3 / Supabase storage  
-- Live preview  
-- Auto-store links in KB  
+- ### 📸 Landing Page Preview  
+![Landing Page](Landing.png) 
+- ### 📸 Landing Page Preview  
+![ChatBot Page](ChatBot.png) 
+- ### 📸 Landing Page Preview  
+![KnowledgeBase Page](Knowledge.png) 
+- ### 📸 Dashboard Page Preview  
+![Dashboard Page](Dashboard.png) 
 
 ### 💬 Chat System
 - Multilingual chat  
